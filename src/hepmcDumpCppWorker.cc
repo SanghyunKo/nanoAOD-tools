@@ -43,7 +43,8 @@ void hepmcDumpCppWorker::genEvent(){
 
   const unsigned int nGenPart = **b_nGenPart;
 
-  HepMC::GenEvent* genEvent = new HepMC::GenEvent();
+  // HepMC::GenEvent* genEvent = new HepMC::GenEvent(); // memory leak
+  auto genEvent = std::make_shared<HepMC::GenEvent>();
   genEvent->set_event_number(**b_eventNumber);
   //genEvent->set_signal_process_id(0);
   //genEvent->set_event_scale(0);
@@ -64,6 +65,7 @@ void hepmcDumpCppWorker::genEvent(){
     }
   }
 
+  // std::vector< std::shared_ptr<HepMC::GenParticle> > particles;
   std::vector<HepMC::GenParticle*> particles;
   std::vector<std::pair<HepMC::GenParticle*, double>> orphans;
   std::map<int, std::vector<HepMC::GenParticle*>> mother2DaughtersMap;
@@ -80,14 +82,15 @@ void hepmcDumpCppWorker::genEvent(){
     const double pz = std::abs(eta) > 100 ? eta : pt*sinh(eta);
     const double energy = std::abs(eta) > 100 ? pt : hypot(mass, pt*cosh(eta));
     HepMC::FourVector p4(px, py, pz, energy);
-    HepMC::GenParticle* particle = new HepMC::GenParticle(p4, pdgId, status);
+    HepMC::GenParticle* particle = new HepMC::GenParticle(p4, pdgId, status); // particles deleted at ~GenVertex()
+    // auto particle = std::make_shared<HepMC::GenParticle>(p4, pdgId, status);
 
-    particles.push_back(particle);
+    particles.push_back( particle );
     auto assoc = mother2DaughtersMap.find(mother);
     if ( assoc == mother2DaughtersMap.end() ) assoc = mother2DaughtersMap.insert(std::make_pair(mother, std::vector<HepMC::GenParticle*>())).first;
-    assoc->second.push_back(particle);
+    assoc->second.push_back( particle );
 
-    if ( mother < 0 ) orphans.push_back(std::make_pair(particle, mass));
+    if ( mother < 0 ) orphans.push_back(std::make_pair( particle , mass));
   }
 
   // Find incident beam particles
@@ -113,8 +116,9 @@ void hepmcDumpCppWorker::genEvent(){
   }
 
   // Build the primary vertex
-  HepMC::GenVertex *vertex0 = new HepMC::GenVertex(HepMC::FourVector(0,0,0,0));
-  genEvent->add_vertex(vertex0);
+  // HepMC::GenVertex *vertex0 = new HepMC::GenVertex(HepMC::FourVector(0,0,0,0)); // memory leak
+  auto vertex0 = std::make_shared<HepMC::GenVertex>(HepMC::FourVector(0,0,0,0));
+  genEvent->add_vertex( vertex0.get() );
   const double pz1 = cmEnergy_*(**b_Generator_x1), pz2 = -cmEnergy_*(**b_Generator_x2);
   if ( particle1 ) {
     // Redo the pz of the incident parton
@@ -144,17 +148,24 @@ void hepmcDumpCppWorker::genEvent(){
 
   // Prepare vertex list
 
+  std::vector<std::shared_ptr<HepMC::GenVertex>> vtx_list;
+
   for ( auto x = mother2DaughtersMap.begin(); x != mother2DaughtersMap.end(); ++x ) {
     const int motherIdx = x->first;
     const auto& daughters = x->second;
     HepMC::GenParticle* mother = motherIdx < 0 ? nullptr : particles[motherIdx];
 
     HepMC::GenVertex *vertex = nullptr;
+    
     if ( mother == nullptr or mother == particle1 or mother == particle2 ) {
-      vertex = vertex0;
+      vertex = vertex0.get();
     }
     else {
-      vertex = new HepMC::GenVertex(HepMC::FourVector(0,0,0,0));
+      // vertex = new HepMC::GenVertex(HepMC::FourVector(0,0,0,0)); memory leak
+      auto vertex_ptr = std::make_shared<HepMC::GenVertex>(HepMC::FourVector(0,0,0,0));
+      vertex = vertex_ptr.get();
+      vtx_list.push_back(vertex_ptr);
+      
       genEvent->add_vertex(vertex);
       vertex->add_particle_in(mother);
     }
@@ -179,11 +190,11 @@ void hepmcDumpCppWorker::genEvent(){
       if ( hasSignalVertex ) break;
     }
   }
-  if ( !hasSignalVertex ) genEvent->set_signal_process_vertex(vertex0);
+  if ( !hasSignalVertex ) genEvent->set_signal_process_vertex( vertex0.get() );
 
   // Finalize HepMC event record
   genEvent->set_beam_particles(particle1, particle2);
-  fout_->write_event(genEvent);
+  fout_->write_event(genEvent.get());
 }
 
 hepmcDumpCppWorker::~hepmcDumpCppWorker(){

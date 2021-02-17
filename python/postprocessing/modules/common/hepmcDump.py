@@ -7,7 +7,7 @@ ROOT.PyConfig.IgnoreCommandLineOptions = True
 
 class hepmcDump(Module, object):
     def __init__(self, *args, **kwargs):
-        super(hepmcDump, self).__init__(*args, **kwargs)
+        super(hepmcDump, self).__init__()
         self.doCppOutput = kwargs.get('doCppOutput', False)
         self.hepmcDumpFileName = kwargs.get('fileName', "hepmc.dat")
 
@@ -88,4 +88,4 @@ class hepmcDump(Module, object):
 # define modules using the syntax 'name = lambda : constructor' to avoid
 # having them loaded when not needed
 
-hepmc = lambda: hepmcDump(fileName="hepmc.dat")
+hepmc = lambda: hepmcDump(fileName="fifo.hepmc")
