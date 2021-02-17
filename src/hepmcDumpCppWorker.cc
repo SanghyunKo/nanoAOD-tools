@@ -2,8 +2,10 @@
 #include "HepMC/GenEvent.h"
 #include <iostream>
 #include <cmath>
+#include <stdexcept>
 
-hepmcDumpCppWorker::hepmcDumpCppWorker(const std::string fileName){
+hepmcDumpCppWorker::hepmcDumpCppWorker(const std::string fileName, const unsigned int pdfStart, const unsigned int pdfEnd, const std::string pdfSet)
+: _pdfStart(pdfStart), _pdfEnd(pdfEnd), _pdfSet(pdfSet) {
   signalParticlePdgIds_ = {6, -6, 25, 24, -24, 23, -23};
 
   fout_ = new HepMC::IO_GenEvent(fileName);
@@ -13,7 +15,8 @@ void hepmcDumpCppWorker::setGenEventInfo(TTreeReaderValue<unsigned long long> *e
                                          TTreeReaderValue<float> *Generator_x1, TTreeReaderValue<float> *Generator_x2,
                                          TTreeReaderValue<float> *genWeight,
                                          TTreeReaderValue<unsigned> *nLHEScaleWeight, TTreeReaderArray<float> *LHEScaleWeight,
-                                         TTreeReaderValue<unsigned> *nLHEPdfWeight, TTreeReaderArray<float> *LHEPdfWeight){
+                                         TTreeReaderValue<unsigned> *nLHEPdfWeight, TTreeReaderArray<float> *LHEPdfWeight,
+                                         TTreeReaderValue<unsigned> *nUnknownWeight, TTreeReaderArray<float> *UnknownWeight) {
   b_eventNumber     = eventNumber;
   b_genWeight       = genWeight;
   b_Generator_x1    = Generator_x1;
@@ -22,6 +25,8 @@ void hepmcDumpCppWorker::setGenEventInfo(TTreeReaderValue<unsigned long long> *e
   b_LHEScaleWeight  = LHEScaleWeight;
   b_nLHEPdfWeight   = nLHEPdfWeight;
   b_LHEPdfWeight    = LHEPdfWeight;
+  b_nUnknownWeight  = nUnknownWeight;
+  b_UnknownWeight   = UnknownWeight;
 }
 
 void hepmcDumpCppWorker::setGenParticles(TTreeReaderValue<unsigned> *nGenPart,
@@ -55,13 +60,30 @@ void hepmcDumpCppWorker::genEvent(){
   genEvent->weights().clear();
   genEvent->weights().push_back(**b_genWeight);
   if ( b_LHEScaleWeight != nullptr ) {
-    for ( int i=0, n=**b_nLHEScaleWeight; i<n; ++i ) {
+    for ( unsigned int i=0, n=**b_nLHEScaleWeight; i<n; ++i ) {
       genEvent->weights().push_back(b_LHEScaleWeight->At(i));
     }
   }
-  if ( b_nLHEPdfWeight != nullptr ) {
-    for ( int i=0, n=**b_nLHEPdfWeight; i<n; ++i ) {
-      genEvent->weights().push_back(b_LHEPdfWeight->At(i));
+
+  if (_pdfSet=="LHEPdfWeight") {
+    if ( b_nLHEPdfWeight != nullptr ) {
+      if ( _pdfEnd >= **b_nLHEPdfWeight )
+        throw std::invalid_argument("PDF end index is larger (or equal) than number of PDFs!");
+      
+      for ( unsigned int i=_pdfStart; i<_pdfEnd+1; ++i ) {
+        genEvent->weights().push_back(b_LHEPdfWeight->At(i));
+      }
+    }
+  }
+
+  if (_pdfSet=="UnknownWeight") {
+    if ( b_nUnknownWeight != nullptr ) {
+      if ( _pdfEnd >= **b_nUnknownWeight )
+        throw std::invalid_argument("PDF end index is larger (or equal) than number of PDFs!");
+      
+      for ( unsigned int i = _pdfStart; i < _pdfEnd+1; ++i ) {
+        genEvent->weights().push_back(b_UnknownWeight->At(i));
+      }
     }
   }
 

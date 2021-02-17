@@ -6,10 +6,13 @@ ROOT.PyConfig.IgnoreCommandLineOptions = True
 
 
 class hepmcDump(Module, object):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, pdfStart, pdfEnd ,*args, **kwargs):
         super(hepmcDump, self).__init__()
+        self.pdfStart = pdfStart
+        self.pdfEnd = pdfEnd
         self.doCppOutput = kwargs.get('doCppOutput', False)
         self.hepmcDumpFileName = kwargs.get('fileName', "hepmc.dat")
+        self.pdfReader = kwargs.get('pdfReader','LHEPdfWeight')
 
         if "/hepmcDumpCppWorker_cc.so" not in ROOT.gSystem.GetLibraries():
             print("Load C++ hepmcDumpCppWorker worker module")
@@ -26,7 +29,7 @@ class hepmcDump(Module, object):
         pass
 
     def beginJob(self):
-        self.worker = ROOT.hepmcDumpCppWorker(self.hepmcDumpFileName)
+        self.worker = ROOT.hepmcDumpCppWorker(self.hepmcDumpFileName,self.pdfStart,self.pdfEnd,self.pdfReader)
         pass
 
     def endJob(self):
@@ -51,12 +54,15 @@ class hepmcDump(Module, object):
         self.LHEScaleWeight = tree.arrayReader("LHEScaleWeight")
         self.nLHEPdfWeight = tree.valueReader("nLHEPdfWeight")
         self.LHEPdfWeight = tree.arrayReader("LHEPdfWeight")
+        self.nUnknownWeight = tree.valueReader("nUnknownWeight")
+        self.UnknownWeight = tree.arrayReader("UnknownWeight")
         # self.worker.setGenEventInfo(self.eventNumber, self.genWeight)
         ## If you don't want to keep weights for the systematic uncertainty
         self.worker.setGenEventInfo(self.eventNumber, self.genWeight,
                                     self.Generator_x1, self.Generator_x2,
                                     self.nLHEScaleWeight, self.LHEScaleWeight,
-                                    self.nLHEPdfWeight, self.LHEPdfWeight)
+                                    self.nLHEPdfWeight, self.LHEPdfWeight,
+                                    self.nUnknownWeight, self.UnknownWeight)
 
         self.nGenPart = tree.valueReader("nGenPart")
         self.GenPart_pt = tree.arrayReader("GenPart_pt")
@@ -88,4 +94,6 @@ class hepmcDump(Module, object):
 # define modules using the syntax 'name = lambda : constructor' to avoid
 # having them loaded when not needed
 
-hepmc = lambda: hepmcDump(fileName="fifo.hepmc")
+hepmc_nnpdf40 = lambda: hepmcDump(2,101,fileName="fifo_nnpdf40.hepmc",pdfReader="UnknownWeight")
+hepmc_nnpdf30 = lambda: hepmcDump(1,102,fileNname="fifo_nnpdf30.hepmc",pdfReader="LHEPdfWeight")
+hepmc_nnpdf31 = lambda: hepmcDump(1,102,fileNname="fifo_nnpdf31.hepmc",pdfReader="LHEPdfWeight")
